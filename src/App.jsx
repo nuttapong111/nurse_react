@@ -1,11 +1,6 @@
+// src/App.jsx
+import { Navigate } from "react-router-dom";
 
-function App() {
-  return (
-    <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h1>Welcome to Nurse Frontend</h1>
-      <p>ไปที่ /register เพื่อสมัครสมาชิก</p>
-    </div>
-  );
+export default function App() {
+  return <Navigate to="/login" />;
 }
-
-export default App;

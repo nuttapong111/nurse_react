@@ -1,0 +1,55 @@
+/* Layout.css */
+.schedule-bg {
+  background-image: url("/public/bg-dashboard.png"); /* ใช้ชื่อภาพใหม่ตามไฟล์ที่ส่ง */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  z-index: 1000;
+  border-top: 1px solid #ccc;
+  background: #fff;
+  font-size: 20px;
+  padding: 0.5rem 0;
+}
+
+/* ปรับ Sidebar */
+.ant-layout-sider {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e8e8e8;
+  width: 500px;
+}
+
+/* Logo / Branding ส่วนบนของ Sider */
+.text-center h5 {
+  font-weight: bold;
+  margin-top: 10px;
+  font-size: 1rem;
+  color: #1890ff;
+}
+
+/* Active menu item */
+.ant-menu-item-selected {
+  background-color: #e6f7ff !important;
+  border-left: 4px solid #1890ff !important;
+  font-weight: 500;
+}
+
+/* Hover effect */
+.ant-menu-item:hover {
+  background-color: #f0f5ff !important;
+}
+
+/* Avatar cursor pointer */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Content background */
+.bg-light {
+  background-color: #f9f9f9 !important;
+}

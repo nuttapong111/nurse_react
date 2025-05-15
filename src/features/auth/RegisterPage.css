@@ -1,0 +1,51 @@
+.register-bg {
+  background-image: url("/public/nurse.png");
+  background-size: cover;
+  background-position: center;
+}
+.register-form {
+  background-color: white;
+  align-items: center;
+  width: 40%;
+  margin-left: 30%;
+  margin-top: 2%;
+  padding: 5%;
+  border-radius: 4%;
+  margin-bottom: 10%;
+}
+
+@media (max-width: 700px) {
+  .register-form {
+    background-color: white;
+    align-items: center;
+    width: 80%;
+    margin-left: 5%;
+    margin-top: 5%;
+    padding: 5%;
+    border-radius: 25px;
+    margin-bottom: 10%;
+  }
+  .register-bg {
+    background-image: url("/public/bg-nurse-ai-clean.png");
+    background-size: cover;
+    background-position: center;
+  }
+}
+
+@media (max-width: 1250px) and (min-width: 700px) {
+  .register-form {
+    background-color: white;
+    align-items: center;
+    width: 60%;
+    margin-left: 20%;
+    margin-top: 5%;
+    padding: 5%;
+    border-radius: 25px;
+    margin-bottom: 10%;
+  }
+  .register-bg {
+    background-image: url("/public/nurse.png");
+    background-size: cover;
+    background-position: center;
+  }
+}
