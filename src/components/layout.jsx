@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Layout, Menu, Dropdown, Avatar, Drawer } from "antd";
 import {
   HomeOutlined,
@@ -19,11 +19,6 @@ const AppLayout = () => {
   const location = useLocation();
   const [drawerVisible, setDrawerVisible] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) navigate("/login");
-  }, [navigate]);
-
   const handleMenuClick = ({ key }) => {
     if (key === "logout") {
       localStorage.removeItem("token");
@@ -37,9 +32,9 @@ const AppLayout = () => {
 
   const userMenu = (
     <Menu onClick={handleMenuClick}>
-      {/* <Menu.Item key="/profile" icon={<UserOutlined />}>
-        โปรไฟล์ของฉัน
-      </Menu.Item> */}
+      {/* <Menu.Item key="/profile" icon={<UserOutlined />}> */}
+      {/*   โปรไฟล์ของฉัน */}
+      {/* </Menu.Item> */}
       <Menu.Item key="logout" danger icon={<LogoutOutlined />}>
         ออกจากระบบ
       </Menu.Item>

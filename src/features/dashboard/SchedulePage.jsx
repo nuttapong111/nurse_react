@@ -138,7 +138,9 @@ const SchedulePage = () => {
 
   // เชื่อมต่อ socket.io เมื่อ component mount
   useEffect(() => {
-    const s = io('http://localhost:3000');
+    // ใช้ environment variable ถ้ามี ไม่งั้น fallback เป็น localhost
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+    const s = io(SOCKET_URL);
     setSocket(s);
     s.on('connect', () => {
       setSocketId(s.id);
@@ -364,13 +366,13 @@ const SchedulePage = () => {
             >
               ส่งออก Excel
             </Button>
-            <Button
+            {/* <Button
               icon={<FileImageOutlined />}
               onClick={() => handleExport("image")}
               style={{ backgroundColor: "#fff7e6", color: "#fa8c16" }}
             >
               บันทึกรูป
-            </Button>
+            </Button> */}
             <Button
               type="primary"
               icon={<PlusCircleOutlined />}
