@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Card, Form, Input, Button, Typography, message } from "antd";
-import axios from "axios";
+import { Card, Form, Input, Button, Typography } from "antd";
+import Swal from "sweetalert2";
 
 const { Title } = Typography;
 const API_URL = import.meta.env.VITE_API_URL;
@@ -11,35 +11,60 @@ const ProfilePage = () => {
 
   useEffect(() => {
     // โหลดข้อมูลผู้ใช้ (mockup หรือดึงจาก API จริง)
-    const fetchProfile = async () => {
+    const fetchUserData = async () => {
       setLoading(true);
       try {
-        // ตัวอย่าง: สมมติ API /api/setting/me คืนข้อมูล user
-        const res = await axios.get(`${API_URL}/setting/me`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        const response = await fetch(`${API_URL}/users/profile`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         });
-        setUser(res.data);
-        form.setFieldsValue(res.data);
-      } catch (err) {
-        message.error("โหลดข้อมูลผู้ใช้ไม่สำเร็จ");
+        const data = await response.json();
+        setUser(data);
+        form.setFieldsValue(data);
+      } catch (error) {
+        Swal.fire({
+          icon: "error",
+          title: "เกิดข้อผิดพลาด",
+          text: "โหลดข้อมูลผู้ใช้ไม่สำเร็จ",
+          confirmButtonText: "ตกลง",
+        });
       } finally {
         setLoading(false);
       }
     };
-    fetchProfile();
+    fetchUserData();
   }, [form]);
 
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      // ตัวอย่าง: สมมติ API /api/setting/me (PUT) สำหรับอัปเดตข้อมูล
-      await axios.put(`${API_URL}/setting/me`, values, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      const response = await fetch(`${API_URL}/users/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
       });
-      message.success("บันทึกข้อมูลสำเร็จ");
+      if (response.ok) {
+        Swal.fire({
+          icon: "success",
+          title: "สำเร็จ",
+          text: "บันทึกข้อมูลสำเร็จ",
+          confirmButtonText: "ตกลง",
+        });
       setUser(values);
-    } catch (err) {
-      message.error("บันทึกข้อมูลไม่สำเร็จ");
+      } else {
+        throw new Error("บันทึกข้อมูลไม่สำเร็จ");
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: "บันทึกข้อมูลไม่สำเร็จ",
+        confirmButtonText: "ตกลง",
+      });
     } finally {
       setLoading(false);
     }

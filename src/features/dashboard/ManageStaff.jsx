@@ -9,7 +9,6 @@ import {
   Input,
   Select,
   Space,
-  message,
 } from "antd";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -24,6 +23,7 @@ const ManageStaff = () => {
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
+  const [editId, setEditId] = useState(null);
 
   const fetchStaff = async () => {
     try {
@@ -38,12 +38,20 @@ const ManageStaff = () => {
 
   const fetchWards = async () => {
     try {
-      const res = await axios.get(`${API_URL}/schedule/myward`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/schedule/myward`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
-      setWards(res.data);
-    } catch {
-      message.error("โหลดข้อมูลวอร์ดไม่สำเร็จ");
+      const data = await response.json();
+      setWards(data);
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: "โหลดข้อมูลวอร์ดไม่สำเร็จ",
+        confirmButtonText: "ตกลง",
+      });
     }
   };
 
@@ -71,6 +79,47 @@ const ManageStaff = () => {
     }
   };
 
+  const handleEdit = async () => {
+    try {
+      const values = await form.validateFields();
+      await axios.put(`${API_URL}/setting/user/${editId}`, values, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      Swal.fire("สำเร็จ", "แก้ไขข้อมูลพยาบาลสำเร็จ", "success");
+      form.resetFields();
+      setIsModalOpen(false);
+      fetchStaff();
+    } catch (err) {
+      Swal.fire(
+        "ผิดพลาด",
+        err?.response?.data?.message || "เกิดข้อผิดพลาด",
+        "error"
+      );
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/setting/user/${id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      Swal.fire("สำเร็จ", "ลบพยาบาลสำเร็จ", "success");
+      fetchStaff();
+    } catch (err) {
+      Swal.fire("ผิดพลาด", "ไม่สามารถลบได้", "error");
+    }
+  };
+
+  const openModal = (record = null) => {
+    setEditId(record ? record.id : null);
+    setIsModalOpen(true);
+    form.setFieldsValue({
+      name: record?.name || "",
+      role: record?.role || undefined,
+      wardId: record?.wardId || undefined,
+    });
+  };
+
   const filteredData = staff.filter(
     (item) =>
       (!filteredWard || item.wardId === filteredWard) &&
@@ -87,11 +136,45 @@ const ManageStaff = () => {
       title: "ตำแหน่ง",
       dataIndex: "role",
       key: "role",
+      render: (text) => (text === "nurse" ? "พยาบาล" : "ผู้ช่วยพยาบาล"),
     },
     {
       title: "วอร์ด",
       key: "ward",
       render: (_, record) => record.ward?.name || "-",
+    },
+    {
+      title: "การจัดการ",
+      key: "action",
+      render: (_, record) => (
+        <Space>
+          <Button type="link" onClick={() => openModal(record)}>
+            แก้ไข
+          </Button>
+          <Button
+            danger
+            type="link"
+            onClick={() => {
+              Swal.fire({
+                title: "คุณแน่ใจหรือไม่?",
+                text: "การลบพยาบาลนี้ไม่สามารถย้อนกลับได้",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                cancelButtonColor: "#3085d6",
+                confirmButtonText: "ลบ",
+                cancelButtonText: "ยกเลิก",
+              }).then((result) => {
+                if (result.isConfirmed) {
+                  handleDelete(record.id);
+                }
+              });
+            }}
+          >
+            ลบ
+          </Button>
+        </Space>
+      ),
     },
   ];
 
@@ -116,7 +199,7 @@ const ManageStaff = () => {
           allowClear
           style={{ width: 250 }}
         />
-        <Button type="primary" onClick={() => setIsModalOpen(true)}>
+        <Button type="primary" onClick={() => openModal()}>
           เพิ่มพยาบาล
         </Button>
       </Space>
@@ -127,10 +210,13 @@ const ManageStaff = () => {
       />
 
       <Modal
-        title="เพิ่มพยาบาลใหม่"
+        title={editId ? "แก้ไขข้อมูลพยาบาล" : "เพิ่มพยาบาลใหม่"}
         open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onOk={handleAdd}
+        onCancel={() => {
+          setIsModalOpen(false);
+          form.resetFields();
+        }}
+        onOk={editId ? handleEdit : handleAdd}
         okText="บันทึก"
         cancelText="ยกเลิก"
       >

@@ -23,10 +23,29 @@ const { Title } = Typography;
 const { Option } = Select;
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Mapping สำหรับแสดงผลภาษาไทย <-> key ภาษาอังกฤษ
+const PRIORITY_OPTIONS = [
+  { label: "วันหยุดตามที่ขอ", value: "userOffDays" },
+  { label: "จำนวนเวรติดต่อกัน", value: "maxConsecutiveShifts" },
+  { label: "จำนวนเวรดึกติดต่อกัน", value: "maxNightShifts" },
+  {
+    label: "จำนวนเวลาที่ทำงานติดต่อกันสูงสุด(ชั่วโมง)",
+    value: "maxConsecutiveWorkingHours",
+  },
+  { label: "จำนวนเวรรวมที่แตกต่างกันของแต่ละคน", value: "maxShiftDiff" },
+  {
+    label: "จำนวนเวรที่แตกต่างกันของแต่ละประเภทเวร",
+    value: "maxShiftDiffPerType",
+  },
+];
+
 const DEFAULT_PRIORITY = [
-  "วันหยุดตามที่ขอ",
-  "จำนวนเวรติดต่อกัน",
-  "จำนวนเวรดึกติดต่อกัน",
+  "userOffDays",
+  "maxConsecutiveShifts",
+  "maxNightShifts",
+  "maxConsecutiveWorkingHours",
+  "maxShiftDiff",
+  "maxShiftDiffPerType",
 ];
 
 const RuleSettingItem = ({ label, value, onChange }) => (
@@ -114,6 +133,10 @@ const ManageRule = () => {
   const [consecutiveShifts, setConsecutiveShifts] = useState(3);
   const [consecutiveNightShifts, setConsecutiveNightShifts] = useState(2);
   const [priority, setPriority] = useState([]);
+  const [maxConsecutiveWorkingHours, setMaxConsecutiveWorkingHours] =
+    useState(16);
+  const [maxShiftDiff, setMaxShiftDiff] = useState(3);
+  const [maxShiftDiffPerType, setMaxShiftDiffPerType] = useState(2);
 
   const monthYearOptions = generateMonthYearOptions();
 
@@ -124,52 +147,58 @@ const ManageRule = () => {
   }, []);
 
   useEffect(() => {
-    axios
-      .get(`${API_URL}/schedule/myward`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      })
-      .then((res) => setWards(res.data))
-      .catch(() => message.error("โหลดข้อมูลวอร์ดไม่สำเร็จ"));
+    fetchWards();
   }, []);
 
   useEffect(() => {
     if (!selectedWard || !selectedMonth || !selectedYear) return;
 
-    axios
-      .get(
-        `${API_URL}/setting/constraint/${selectedWard}/${selectedYear}/${selectedMonth}`,
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        }
-      )
-      .then((res) => {
-        const { consecutiveShifts, consecutiveNightShifts, maxLeavePerMonth } =
-          res.data;
-        setConsecutiveShifts(res.data.maxConsecutiveShifts);
-        setConsecutiveNightShifts(res.data.maxNightShifts);
-      })
-      .catch(() => message.error("โหลดข้อมูลเกณฑ์ไม่สำเร็จ"));
+    fetchPriorityRules();
+  }, [selectedWard, selectedMonth, selectedYear]);
 
-    axios
-      .get(
+  const fetchWards = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/schedule/myward`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setWards(response.data);
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: "โหลดข้อมูลวอร์ดไม่สำเร็จ",
+        confirmButtonText: "ตกลง",
+      });
+    }
+  };
+
+  const fetchPriorityRules = async () => {
+    try {
+      const response = await axios.get(
         `${API_URL}/setting/priority-setting/${selectedWard}/${selectedYear}/${selectedMonth}`,
         {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
-      )
-      .then((res) => {
-        const received = res.data.priority;
-        setPriority(
-          Array.isArray(received) && received.length > 0
-            ? received
-            : DEFAULT_PRIORITY
+      );
+      const received = response.data.priority || response.data.criteriaOrder || [];
+        const uniqueReceived = received.filter(
+          (item, idx) => received.indexOf(item) === idx
         );
-      })
-      .catch(() => {
-        message.warning("ใช้ลำดับความสำคัญค่าเริ่มต้น");
-        setPriority(DEFAULT_PRIORITY);
+        const fullPriority = [...uniqueReceived];
+        DEFAULT_PRIORITY.forEach((key) => {
+          if (!fullPriority.includes(key)) fullPriority.push(key);
+        });
+        const finalPriority = DEFAULT_PRIORITY.filter((key) => fullPriority.includes(key));
+        setPriority(finalPriority);
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: "โหลดข้อมูลเกณฑ์ไม่สำเร็จ",
+        confirmButtonText: "ตกลง",
       });
-  }, [selectedWard, selectedMonth, selectedYear]);
+    }
+  };
 
   const moveItem = useCallback((from, to) => {
     setPriority((prev) => {
@@ -180,58 +209,22 @@ const ManageRule = () => {
     });
   }, []);
 
-  const handleConfirmSaveRules = () => {
+  const handleConfirmSaveAll = () => {
     Swal.fire({
       title: "ยืนยันการบันทึก",
-      text: "คุณต้องการบันทึกการตั้งค่าเกณฑ์ใช่หรือไม่?",
+      text: "คุณต้องการบันทึกเกณฑ์และลำดับความสำคัญใช่หรือไม่?",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "บันทึก",
       cancelButtonText: "ยกเลิก",
     }).then((result) => {
       if (result.isConfirmed) {
-        saveRules();
+        saveAll();
       }
     });
   };
 
-  const handleConfirmSavePriority = () => {
-    Swal.fire({
-      title: "ยืนยันการบันทึก",
-      text: "คุณต้องการบันทึกลำดับความสำคัญใช่หรือไม่?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "บันทึก",
-      cancelButtonText: "ยกเลิก",
-    }).then((result) => {
-      if (result.isConfirmed) {
-        savePriority();
-      }
-    });
-  };
-
-  const saveRules = () => {
-    axios
-      .post(
-        `${API_URL}/setting/constraint`,
-        {
-          wardId: selectedWard,
-          year: selectedYear,
-          month: selectedMonth,
-          consecutiveShifts,
-          consecutiveNightShifts,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      )
-      .then(() => Swal.fire("สำเร็จ", "บันทึกเกณฑ์เรียบร้อยแล้ว", "success"))
-      .catch(() => Swal.fire("ผิดพลาด", "ไม่สามารถบันทึกเกณฑ์ได้", "error"));
-  };
-
-  const savePriority = () => {
+  const saveAll = () => {
     axios
       .post(
         `${API_URL}/setting/priority`,
@@ -240,6 +233,11 @@ const ManageRule = () => {
           year: selectedYear,
           month: selectedMonth,
           priority,
+          maxConsecutiveShifts: consecutiveShifts,
+          maxNightShifts: consecutiveNightShifts,
+          maxConsecutiveWorkingHours,
+          maxShiftDiff,
+          maxShiftDiffPerType,
         },
         {
           headers: {
@@ -248,11 +246,13 @@ const ManageRule = () => {
         }
       )
       .then(() =>
-        Swal.fire("สำเร็จ", "บันทึกลำดับความสำคัญเรียบร้อยแล้ว", "success")
+        Swal.fire(
+          "สำเร็จ",
+          "บันทึกเกณฑ์และลำดับความสำคัญเรียบร้อยแล้ว",
+          "success"
+        )
       )
-      .catch(() =>
-        Swal.fire("ผิดพลาด", "ไม่สามารถบันทึกลำดับความสำคัญได้", "error")
-      );
+      .catch(() => Swal.fire("ผิดพลาด", "ไม่สามารถบันทึกได้", "error"));
   };
 
   return (
@@ -317,18 +317,36 @@ const ManageRule = () => {
           value={consecutiveNightShifts}
           onChange={setConsecutiveNightShifts}
         />
+        <RuleSettingItem
+          label="จำนวนเวลาที่ทำงานติดต่อกันสูงสุด(ชั่วโมง)"
+          value={maxConsecutiveWorkingHours}
+          onChange={setMaxConsecutiveWorkingHours}
+        />
+        <RuleSettingItem
+          label="จำนวนเวรรวมที่แตกต่างกันของแต่ละคน"
+          value={maxShiftDiff}
+          onChange={setMaxShiftDiff}
+        />
+        <RuleSettingItem
+          label="จำนวนเวรที่แตกต่างกันของแต่ละประเภทเวร"
+          value={maxShiftDiffPerType}
+          onChange={setMaxShiftDiffPerType}
+        />
       </Card>
 
       <Card type="inner" title="ลำดับความสำคัญ" style={{ marginBottom: 24 }}>
         <DndProvider backend={HTML5Backend}>
-          {priority.map((item, index) => (
-            <DraggableItem
-              key={`${item}-${index}`}
-              index={index}
-              item={item}
-              moveItem={moveItem}
-            />
-          ))}
+          {priority.map((item, index) => {
+            const found = PRIORITY_OPTIONS.find((opt) => opt.value === item);
+            return (
+              <DraggableItem
+                key={`${item}-${index}`}
+                index={index}
+                item={found ? found.label : item}
+                moveItem={moveItem}
+              />
+            );
+          })}
         </DndProvider>
       </Card>
 
@@ -336,19 +354,10 @@ const ManageRule = () => {
         <Col>
           <Button
             type="primary"
-            onClick={handleConfirmSaveRules}
+            onClick={handleConfirmSaveAll}
             disabled={!selectedWard}
           >
-            บันทึกเกณฑ์
-          </Button>
-        </Col>
-        <Col>
-          <Button
-            type="primary"
-            onClick={handleConfirmSavePriority}
-            disabled={!selectedWard}
-          >
-            บันทึกลำดับความสำคัญ
+            บันทึกเกณฑ์และลำดับความสำคัญ
           </Button>
         </Col>
       </Row>

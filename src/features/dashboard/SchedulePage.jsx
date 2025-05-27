@@ -26,6 +26,7 @@ import { io } from 'socket.io-client';
 import LinearProgress from '@mui/material/LinearProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
+import CircularProgress from '@mui/material/CircularProgress';
 
 const { Option } = Select;
 const API_URL = import.meta.env.VITE_API_URL;
@@ -46,8 +47,9 @@ const SchedulePage = () => {
   const [progressOpen, setProgressOpen] = useState(false);
   const [socket, setSocket] = useState(null);
   const [socketId, setSocketId] = useState(null);
+  const [shiftNames, setShiftNames] = useState(["เช้า", "บ่าย", "ดึก"]);
 
-  // ฟังก์ชันแปลง schedules เป็นรูปแบบที่ Table ต้องการ
+  // ฟังก์ชันแปลง schedules เป็นรูปแบบที่ Table ต้องการ (dynamic shiftNames)
   function transformSchedules(schedules) {
     const grouped = {};
     schedules.forEach(item => {
@@ -57,29 +59,32 @@ const SchedulePage = () => {
         grouped[key] = {
           nurseName: item.name,
           date: dateStr,
-          morning: null,
-          afternoon: null,
-          night: null,
         };
+        shiftNames.forEach(name => {
+          grouped[key][name] = null;
+        });
       }
-      if (item.shiftType === 'morning') grouped[key].morning = '✔️';
-      if (item.shiftType === 'evening' || item.shiftType === 'afternoon') grouped[key].afternoon = '✔️';
-      if (item.shiftType === 'night') grouped[key].night = '✔️';
+      if (shiftNames.includes(item.shiftType)) {
+        grouped[key][item.shiftType] = '✔️';
+      }
     });
     return Object.values(grouped);
   }
 
-  // ฟังก์ชันแปลง schedules เป็นรูปแบบ { [date]: { morning: [], afternoon: [], night: [] } }
+  // ฟังก์ชัน groupByDateAndShift แบบ dynamic shiftNames
   function groupByDateAndShift(schedules) {
     const result = {};
     schedules.forEach(item => {
       const dateStr = item.date.split('T')[0];
       if (!result[dateStr]) {
-        result[dateStr] = { morning: [], afternoon: [], night: [] };
+        result[dateStr] = {};
+        shiftNames.forEach(name => {
+          result[dateStr][name] = [];
+        });
       }
-      if (item.shiftType === 'morning') result[dateStr].morning.push(item.name);
-      if (item.shiftType === 'evening' || item.shiftType === 'afternoon') result[dateStr].afternoon.push(item.name);
-      if (item.shiftType === 'night') result[dateStr].night.push(item.name);
+      if (shiftNames.includes(item.shiftType)) {
+        result[dateStr][item.shiftType].push(item.name);
+      }
     });
     return result;
   }
@@ -90,7 +95,7 @@ const SchedulePage = () => {
     } else {
       setTableData([]);
     }
-  }, [data]);
+  }, [data, shiftNames]);
 
   useEffect(() => {
     axios
@@ -128,7 +133,7 @@ const SchedulePage = () => {
 
   useEffect(() => {
     setCalendarData(groupByDateAndShift(data));
-  }, [data]);
+  }, [data, shiftNames]);
 
   useEffect(() => {
     if (month && year) {
@@ -138,7 +143,9 @@ const SchedulePage = () => {
 
   // เชื่อมต่อ socket.io เมื่อ component mount
   useEffect(() => {
-    const s = io('http://localhost:3000');
+    // ใช้ environment variable ถ้ามี ไม่งั้น fallback เป็น localhost
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+    const s = io(SOCKET_URL);
     setSocket(s);
     s.on('connect', () => {
       setSocketId(s.id);
@@ -150,6 +157,26 @@ const SchedulePage = () => {
       s.disconnect();
     };
   }, []);
+
+  // ดึง shiftNames จาก backend ตาม wardId
+  useEffect(() => {
+    if (!ward) return;
+    async function fetchShiftNames() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${API_URL}/setting/shift-rule/config?wardId=${ward}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.data && Array.isArray(res.data.shiftNames)) {
+          setShiftNames(res.data.shiftNames);
+        }
+      } catch {
+        setShiftNames(["เช้า", "บ่าย", "ดึก"]);
+      }
+    }
+    fetchShiftNames();
+  }, [ward, month, year]);
 
   const getMonthYearOptions = () => {
     const result = [];
@@ -259,33 +286,21 @@ const SchedulePage = () => {
     if (!shifts) return null;
     return (
       <div style={{ fontSize: 12 }}>
-        <div style={{
-          background: '#e3f2fd', // ฟ้าอ่อน
+        {shiftNames.map((name, idx) => (
+          <div key={name} style={{
+            background: idx % 2 === 0 ? '#e3f2fd' : '#fff3e0',
           borderRadius: 4,
           marginBottom: 2,
           padding: '2px 4px'
         }}>
-          <b>เช้า:</b> {shifts.morning.length ? shifts.morning.join(', ') : '-'}
+            <b>{name}:</b> {shifts[name]?.length ? shifts[name].join(', ') : '-'}
         </div>
-        <div style={{
-          background: '#fff3e0', // ส้มอ่อน
-          borderRadius: 4,
-          marginBottom: 2,
-          padding: '2px 4px'
-        }}>
-          <b>บ่าย:</b> {shifts.afternoon.length ? shifts.afternoon.join(', ') : '-'}
-        </div>
-        <div style={{
-          background: '#ede7f6', // ม่วงอ่อน
-          borderRadius: 4,
-          padding: '2px 4px'
-        }}>
-          <b>ดึก:</b> {shifts.night.length ? shifts.night.join(', ') : '-'}
-        </div>
+        ))}
       </div>
     );
   }
 
+  // columns ของ Table แบบ dynamic shiftNames
   const columns = [
     {
       title: "ชื่อพยาบาล",
@@ -297,24 +312,12 @@ const SchedulePage = () => {
       dataIndex: "date",
       key: "date",
     },
-    {
-      title: "กะเช้า",
-      dataIndex: "morning",
-      key: "morning",
+    ...shiftNames.map(name => ({
+      title: name,
+      dataIndex: name,
+      key: name,
       render: (val) => val || "-",
-    },
-    {
-      title: "กะบ่าย",
-      dataIndex: "afternoon",
-      key: "afternoon",
-      render: (val) => val || "-",
-    },
-    {
-      title: "กะดึก",
-      dataIndex: "night",
-      key: "night",
-      render: (val) => val || "-",
-    },
+    })),
   ];
 
   return (
@@ -364,13 +367,13 @@ const SchedulePage = () => {
             >
               ส่งออก Excel
             </Button>
-            <Button
+            {/* <Button
               icon={<FileImageOutlined />}
               onClick={() => handleExport("image")}
               style={{ backgroundColor: "#fff7e6", color: "#fa8c16" }}
             >
               บันทึกรูป
-            </Button>
+            </Button> */}
             <Button
               type="primary"
               icon={<PlusCircleOutlined />}
@@ -394,8 +397,31 @@ const SchedulePage = () => {
       <Dialog open={progressOpen} maxWidth="xs" fullWidth>
         <DialogContent>
           <div style={{ textAlign: 'center', padding: 16 }}>
-            <div style={{ marginBottom: 12 }}>กำลังสร้างตารางเวร... {progress}%</div>
-            <LinearProgress variant="determinate" value={progress} />
+            <div style={{ marginBottom: 12 }}>กำลังสร้างตารางเวร...</div>
+            <div style={{ position: 'relative', display: 'inline-flex', marginBottom: 8 }}>
+              <CircularProgress
+                variant="determinate"
+                value={progress}
+                size={80}
+                thickness={5}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                  fontWeight: 'bold',
+                }}
+              >
+                {progress}%
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

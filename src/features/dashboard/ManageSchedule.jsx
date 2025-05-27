@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   Typography,
@@ -16,6 +16,8 @@ import {
 import dayjs from "dayjs";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import axios from "axios";
+import "dayjs/locale/th";
+import Swal from "sweetalert2";
 dayjs.extend(isSameOrBefore);
 
 const { Title } = Typography;
@@ -28,14 +30,20 @@ const generateMonthYearOptions = () => {
   const options = [];
   let current = start;
   while (current.isSameOrBefore(end, "month")) {
-    options.push({ month: current.month() + 1, year: current.year() });
+    options.push({
+      month: current.month() + 1,
+      year: current.year(),
+      label: `${current.locale('th').format('MMMM')} ${current.year() + 543}`,
+    });
     current = current.add(1, "month");
   }
   return options;
 };
 
 const ManageSchedule = () => {
+  const refCurrentMonth = useRef();
   const monthYearOptions = generateMonthYearOptions();
+  const yearOptions = [...new Set(monthYearOptions.map(opt => opt.year))];
   const latest = monthYearOptions[monthYearOptions.length - 1];
 
   const [wards, setWards] = useState([]);
@@ -46,20 +54,67 @@ const ManageSchedule = () => {
   const [shiftConfig, setShiftConfig] = useState({});
   const [loading, setLoading] = useState(false);
   const [useSameShift, setUseSameShift] = useState(false);
-  const [uniformShift, setUniformShift] = useState({
-    เช้า: { nurse: 0, assistant: 0 },
-    บ่าย: { nurse: 0, assistant: 0 },
-    ดึก: { nurse: 0, assistant: 0 },
-  });
+  const [shiftNames, setShiftNames] = useState(["เช้า", "บ่าย", "ดึก"]);
+  const [shiftTimes, setShiftTimes] = useState([
+    { start: "07:00", end: "15:00" },
+    { start: "15:00", end: "23:00" },
+    { start: "23:00", end: "07:00" },
+  ]);
+  const [uniformShift, setUniformShift] = useState({});
+
+  const fetchWards = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_URL}/schedule/myward`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setWards(res.data);
+      if (res.data.length > 0 && !selectedWard) {
+        setSelectedWard(res.data[0].id);
+      }
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "เกิดข้อผิดพลาด",
+        text: "ไม่สามารถโหลดข้อมูลวอร์ดได้",
+        confirmButtonText: "ตกลง",
+      });
+    }
+  };
 
   useEffect(() => {
-    axios
-      .get(`${API_URL}/schedule/myward`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      })
-      .then((res) => setWards(res.data))
-      .catch(() => message.error("โหลดข้อมูลวอร์ดไม่สำเร็จ"));
+    fetchWards();
   }, []);
+
+  useEffect(() => {
+    if (!selectedWard || !selectedMonth || !selectedYear) return;
+    async function fetchShiftConfig() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_URL}/setting/shift-rule/config?wardId=${selectedWard}&month=${selectedMonth}&year=${selectedYear}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data && Array.isArray(res.data.shiftNames)) {
+          setShiftNames(res.data.shiftNames);
+          setShiftTimes(res.data.shiftTimes || Array(res.data.shiftNames?.length || 3).fill({ start: "", end: "" }));
+          const obj = {};
+          res.data.shiftNames.forEach(name => {
+            obj[name] = { nurse: 0, assistant: 0 };
+          });
+          setUniformShift(obj);
+        }
+      } catch (err) {
+        setShiftNames(["เช้า", "บ่าย", "ดึก"]);
+        setShiftTimes([
+          { start: "07:00", end: "15:00" },
+          { start: "15:00", end: "23:00" },
+          { start: "23:00", end: "07:00" },
+        ]);
+        setUniformShift({ "เช้า": { nurse: 0, assistant: 0 }, "บ่าย": { nurse: 0, assistant: 0 }, "ดึก": { nurse: 0, assistant: 0 } });
+      }
+    }
+    fetchShiftConfig();
+  }, [selectedWard, selectedMonth, selectedYear]);
 
   const onSelectDate = (value) => {
     const dateStr = value.format("YYYY-MM-DD");
@@ -103,9 +158,24 @@ const ManageSchedule = () => {
   };
 
   const handleSave = () => {
-    if (!selectedWard) return message.warning("กรุณาเลือกวอร์ดก่อน");
+    if (!selectedWard) {
+      Swal.fire({
+        icon: "warning",
+        title: "คำเตือน",
+        text: "กรุณาเลือกวอร์ดก่อน",
+        confirmButtonText: "ตกลง",
+      });
+      return;
+    }
+
     if (selectedDates.length === 0) {
-      return message.warning("กรุณาเลือกวันที่ต้องการตั้งค่าเวรก่อน");
+      Swal.fire({
+        icon: "warning",
+        title: "คำเตือน",
+        text: "กรุณาเลือกวันที่ต้องการตั้งค่าเวรก่อน",
+        confirmButtonText: "ตกลง",
+      });
+      return;
     }
 
     Modal.confirm({
@@ -121,32 +191,22 @@ const ManageSchedule = () => {
             year: selectedYear,
             month: selectedMonth,
             workingDates: selectedDates,
-            shiftsPerDay: {
-              morning: 1,
-              evening: 1,
-              night: 1
-            },
-            staffPerShift: {
-              morning: { nurse: 0, assistant: 0 },
-              evening: { nurse: 0, assistant: 0 },
-              night: { nurse: 0, assistant: 0 }
-            }
+            shiftsPerDay: Object.fromEntries(shiftNames.map(name => [name, 1])),
+            staffPerShift: {},
+            shiftNames,
+            shiftTimes,
           };
 
           if (useSameShift) {
-            payload.staffPerShift = {
-              morning: uniformShift.เช้า,
-              evening: uniformShift.บ่าย,
-              night: uniformShift.ดึก
-            };
+            shiftNames.forEach(name => {
+              payload.staffPerShift[name] = uniformShift[name] || { nurse: 0, assistant: 0 };
+            });
           } else {
             const firstDate = selectedDates[0];
             const firstConfig = shiftConfig[firstDate] || {};
-            payload.staffPerShift = {
-              morning: firstConfig.เช้า || { nurse: 0, assistant: 0 },
-              evening: firstConfig.บ่าย || { nurse: 0, assistant: 0 },
-              night: firstConfig.ดึก || { nurse: 0, assistant: 0 }
-            };
+            shiftNames.forEach(name => {
+              payload.staffPerShift[name] = firstConfig[name] || { nurse: 0, assistant: 0 };
+            });
           }
 
           await axios.post(`${API_URL}/setting/shift-rule`, payload, {
@@ -155,10 +215,20 @@ const ManageSchedule = () => {
             },
           });
 
-          message.success("บันทึกข้อมูลเรียบร้อยแล้ว");
+          Swal.fire({
+            icon: "success",
+            title: "สำเร็จ",
+            text: "บันทึกข้อมูลเรียบร้อยแล้ว",
+            confirmButtonText: "ตกลง",
+          });
         } catch (err) {
           console.error(err);
-          message.error("เกิดข้อผิดพลาดในการบันทึก");
+          Swal.fire({
+            icon: "error",
+            title: "เกิดข้อผิดพลาด",
+            text: "เกิดข้อผิดพลาดในการบันทึก",
+            confirmButtonText: "ตกลง",
+          });
         } finally {
           setLoading(false);
         }
@@ -172,7 +242,7 @@ const ManageSchedule = () => {
       dataIndex: "date",
       render: (text) => dayjs(text).format("D MMM YYYY"),
     },
-    ...["เช้า", "บ่าย", "ดึก"].flatMap((shiftType) => [
+    ...shiftNames.flatMap((shiftType) => [
       {
         title: `${shiftType} - พยาบาล`,
         dataIndex: `${shiftType}-nurse`,
@@ -204,6 +274,15 @@ const ManageSchedule = () => {
 
   const tableData = selectedDates.sort().map((date) => ({ key: date, date }));
 
+  if (wards.length === 0) {
+    return (
+      <Card>
+        <Title level={4}>ตั้งค่าวันขึ้นเวรในแต่ละเดือน</Title>
+        <p>ไม่พบข้อมูลวอร์ด</p>
+      </Card>
+    );
+  }
+
   return (
     <Card title={<Title level={4}>ตั้งค่าวันขึ้นเวรในแต่ละเดือน</Title>}>
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -231,7 +310,7 @@ const ManageSchedule = () => {
               .filter((opt) => opt.year === selectedYear)
               .map((opt) => (
                 <Option key={opt.month} value={opt.month}>
-                  เดือน {opt.month}
+                  {opt.label}
                 </Option>
               ))}
           </Select>
@@ -242,9 +321,9 @@ const ManageSchedule = () => {
             onChange={setSelectedYear}
             style={{ width: "100%" }}
           >
-            {[...new Set(monthYearOptions.map((opt) => opt.year))].map((y) => (
+            {yearOptions.map((y) => (
               <Option key={y} value={y}>
-                {y}
+                {y + 543}
               </Option>
             ))}
           </Select>
@@ -279,15 +358,15 @@ const ManageSchedule = () => {
           <Col span={24}>
             <Card size="small" title="ตั้งค่าจำนวนพยาบาลสำหรับทุกวัน">
               <Row gutter={[16, 16]}>
-                {["เช้า", "บ่าย", "ดึก"].map((shiftType) => (
-                  <Col span={8} key={shiftType}>
+                {shiftNames.map((shiftType) => (
+                  <Col span={24 / shiftNames.length} key={shiftType}>
                     <Card size="small" title={`กะ${shiftType}`}>
                       <Row gutter={[8, 8]}>
                         <Col span={12}>
                           <div>พยาบาล:</div>
                           <InputNumber
                             min={0}
-                            value={uniformShift[shiftType].nurse}
+                            value={uniformShift[shiftType]?.nurse || 0}
                             onChange={(val) =>
                               handleUniformShiftChange(shiftType, "nurse", val)
                             }
@@ -297,7 +376,7 @@ const ManageSchedule = () => {
                           <div>ผู้ช่วย:</div>
                           <InputNumber
                             min={0}
-                            value={uniformShift[shiftType].assistant}
+                            value={uniformShift[shiftType]?.assistant || 0}
                             onChange={(val) =>
                               handleUniformShiftChange(shiftType, "assistant", val)
                             }
