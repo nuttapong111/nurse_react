@@ -196,6 +196,9 @@ const SchedulePage = () => {
     return result;
   };
 
+  const monthYearOptions = getMonthYearOptions();
+  const yearOptions = [...new Set(monthYearOptions.map(opt => opt.year))];
+
   const handleExport = async (type) => {
     if (!ward || !year || !month)
       return Swal.fire("แจ้งเตือน", "กรุณาเลือกข้อมูลให้ครบก่อน", "warning");
@@ -236,7 +239,34 @@ const SchedulePage = () => {
         "กรุณาเลือกข้อมูลให้ครบก่อนสร้างตารางเวร",
         "warning"
       );
+
+    // ตรวจสอบว่ามีการตั้งค่าเวรในเดือนที่เลือกหรือไม่
     try {
+      const token = localStorage.getItem("token");
+      const configRes = await axios.get(
+        `${API_URL}/setting/shift-rule/config?wardId=${ward}&month=${month}&year=${year}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!configRes.data || !configRes.data.shiftNames || configRes.data.shiftNames.length === 0) {
+        return Swal.fire({
+          icon: "warning",
+          title: "ยังไม่ได้ตั้งค่าเวร",
+          text: "กรุณาตั้งค่ากฎการจัดเวรสำหรับเดือนที่เลือกก่อน",
+          confirmButtonText: "ไปตั้งค่า",
+          showCancelButton: true,
+          cancelButtonText: "ยกเลิก"
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // นำทางไปยังหน้าตั้งค่าเวร
+            window.location.href = `/dashboard/setting/shift-rule?wardId=${ward}&month=${month}&year=${year}`;
+          }
+        });
+        return;
+      }
+
       setProgress(0);
       setProgressOpen(true);
       await axios.post(
@@ -249,7 +279,7 @@ const SchedulePage = () => {
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -259,7 +289,7 @@ const SchedulePage = () => {
         axios
           .get(`${API_URL}/schedule/${ward}/${year}/${month}`, {
             headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${token}`,
             },
           })
           .then((res) => {
@@ -272,7 +302,15 @@ const SchedulePage = () => {
       }, 800);
     } catch (err) {
       setProgressOpen(false);
-      Swal.fire("ผิดพลาด", "ไม่สามารถสร้างตารางเวรได้", "error");
+      const errorMessage = err.response?.data?.message || "ไม่สามารถสร้างตารางเวรได้";
+      const errorDetails = err.response?.data?.details;
+      
+      Swal.fire({
+        icon: "error",
+        title: errorMessage,
+        text: errorDetails,
+        confirmButtonText: "ตกลง",
+      });
     }
   };
 
@@ -322,41 +360,48 @@ const SchedulePage = () => {
 
   return (
     <Card title="ตารางเวร">
-      <Row gutter={[12, 12]} align="middle" wrap>
-        <Col xs={24} sm={12} md={6}>
-          <Select
-            placeholder="เลือกวอร์ด"
-            style={{ width: "100%" }}
-            value={ward}
-            onChange={setWard}
-          >
-            {wardList.map((w) => (
-              <Option key={w.id} value={w.id}>
-                {w.name}
-              </Option>
-            ))}
-          </Select>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Select
-            placeholder="เลือกเดือน ปี"
-            style={{ width: "100%" }}
-            value={month && year ? `${month}-${year}` : undefined}
-            onChange={(val) => {
-              const [m, y] = val.split("-");
-              setMonth(Number(m));
-              setYear(Number(y));
-            }}
-          >
-            {getMonthYearOptions().map((item) => (
-              <Option
-                key={`${item.month}-${item.year}`}
-                value={`${item.month}-${item.year}`}
-              >
-                {item.label}
-              </Option>
-            ))}
-          </Select>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} md={12}>
+          <Space wrap>
+            <Select
+              value={ward}
+              onChange={setWard}
+              style={{ width: 200 }}
+              placeholder="เลือกวอร์ด"
+            >
+              {wardList.map((w) => (
+                <Option key={w.id} value={w.id}>
+                  {w.name}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              value={year}
+              onChange={setYear}
+              style={{ width: 120 }}
+              placeholder="เลือกปี"
+            >
+              {yearOptions.map((y) => (
+                <Option key={y} value={y}>
+                  {y + 543}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              value={month}
+              onChange={setMonth}
+              style={{ width: 120 }}
+              placeholder="เลือกเดือน"
+            >
+              {monthYearOptions
+                .filter((opt) => opt.year === year)
+                .map((opt) => (
+                  <Option key={opt.month} value={opt.month}>
+                    {opt.label}
+                  </Option>
+                ))}
+            </Select>
+          </Space>
         </Col>
         <Col xs={24} md={12} className="d-flex justify-content-end">
           <Space wrap>
@@ -385,6 +430,20 @@ const SchedulePage = () => {
           </Space>
         </Col>
       </Row>
+
+      <AntdCard title="หมายเหตุ" style={{ marginBottom: 24 }}>
+        <div style={{ padding: '16px' }}>
+          <h4 style={{ marginBottom: '16px' }}>วิธีการสร้างตารางเวร :</h4>
+          <ol style={{ paddingLeft: '20px', marginBottom: 0 }}>
+            <li style={{ marginBottom: '8px' }}>สร้าง ward</li>
+            <li style={{ marginBottom: '8px' }}>เพิ่มบุคคลากร เข้าไปยัง ward</li>
+            <li style={{ marginBottom: '8px' }}>เพิ่มวันหยุดที่บุคคลากรต้องการในแต่ละเดือน</li>
+            <li style={{ marginBottom: '8px' }}>ตั้งค่าการจัดเวร</li>
+            <li style={{ marginBottom: '8px' }}>ตั้งค่าจำนวนเวรในแต่ละวัน</li>
+            <li style={{ marginBottom: '8px' }}>ใส่รายละเอียดวันที่ขึ้นเวร</li>
+          </ol>
+        </div>
+      </AntdCard>
 
       <AntdCard title="ตารางเวรแบบปฏิทิน" style={{ marginBottom: 24 }}>
         <Calendar

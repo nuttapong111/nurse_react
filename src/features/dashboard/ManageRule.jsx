@@ -128,38 +128,26 @@ const generateMonthYearOptions = () => {
 const ManageRule = () => {
   const [wards, setWards] = useState([]);
   const [selectedWard, setSelectedWard] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(null);
   const [consecutiveShifts, setConsecutiveShifts] = useState(3);
   const [consecutiveNightShifts, setConsecutiveNightShifts] = useState(2);
   const [priority, setPriority] = useState([]);
-  const [maxConsecutiveWorkingHours, setMaxConsecutiveWorkingHours] =
-    useState(16);
+  const [maxConsecutiveWorkingHours, setMaxConsecutiveWorkingHours] = useState(16);
   const [maxShiftDiff, setMaxShiftDiff] = useState(3);
   const [maxShiftDiffPerType, setMaxShiftDiffPerType] = useState(2);
-
-  const monthYearOptions = generateMonthYearOptions();
-
-  useEffect(() => {
-    const latest = monthYearOptions[monthYearOptions.length - 1];
-    setSelectedMonth(latest.month);
-    setSelectedYear(latest.year);
-  }, []);
 
   useEffect(() => {
     fetchWards();
   }, []);
 
   useEffect(() => {
-    if (!selectedWard || !selectedMonth || !selectedYear) return;
-
+    if (!selectedWard) return;
     fetchPriorityRules();
-  }, [selectedWard, selectedMonth, selectedYear]);
+  }, [selectedWard]);
 
   const fetchWards = async () => {
     try {
       const response = await axios.get(`${API_URL}/schedule/myward`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
       setWards(response.data);
     } catch (error) {
@@ -175,21 +163,21 @@ const ManageRule = () => {
   const fetchPriorityRules = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/setting/priority-setting/${selectedWard}/${selectedYear}/${selectedMonth}`,
+        `${API_URL}/setting/priority-setting/${selectedWard}`,
         {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         }
       );
       const received = response.data.priority || response.data.criteriaOrder || [];
-        const uniqueReceived = received.filter(
-          (item, idx) => received.indexOf(item) === idx
-        );
-        const fullPriority = [...uniqueReceived];
-        DEFAULT_PRIORITY.forEach((key) => {
-          if (!fullPriority.includes(key)) fullPriority.push(key);
-        });
-        const finalPriority = DEFAULT_PRIORITY.filter((key) => fullPriority.includes(key));
-        setPriority(finalPriority);
+      const uniqueReceived = received.filter(
+        (item, idx) => received.indexOf(item) === idx
+      );
+      const fullPriority = [...uniqueReceived];
+      DEFAULT_PRIORITY.forEach((key) => {
+        if (!fullPriority.includes(key)) fullPriority.push(key);
+      });
+      const finalPriority = DEFAULT_PRIORITY.filter((key) => fullPriority.includes(key));
+      setPriority(finalPriority);
     } catch (error) {
       Swal.fire({
         icon: "error",
@@ -230,8 +218,6 @@ const ManageRule = () => {
         `${API_URL}/setting/priority`,
         {
           wardId: selectedWard,
-          year: selectedYear,
-          month: selectedMonth,
           priority,
           maxConsecutiveShifts: consecutiveShifts,
           maxNightShifts: consecutiveNightShifts,
@@ -256,55 +242,23 @@ const ManageRule = () => {
   };
 
   return (
-    <Card title={<Title level={4}>จัดการเกณฑ์</Title>}>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Select
-            placeholder="เลือกวอร์ด"
-            value={selectedWard}
-            onChange={setSelectedWard}
-            style={{ width: "100%" }}
-          >
-            {wards.map((w) => (
-              <Option key={w.id} value={w.id}>
-                {w.name}
-              </Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={4}>
-          <Select
-            placeholder="เดือน"
-            value={selectedMonth}
-            onChange={setSelectedMonth}
-            style={{ width: "100%" }}
-          >
-            {monthYearOptions
-              .filter((opt) => opt.year === selectedYear)
-              .map((opt) => (
-                <Option key={opt.month} value={opt.month}>
-                  เดือน {opt.month}
-                </Option>
-              ))}
-          </Select>
-        </Col>
-        <Col span={4}>
-          <Select
-            placeholder="ปี"
-            value={selectedYear}
-            onChange={setSelectedYear}
-            style={{ width: "100%" }}
-          >
-            {[...new Set(monthYearOptions.map((opt) => opt.year))].map(
-              (year) => (
-                <Option key={year} value={year}>
-                  {year}
-                </Option>
-              )
-            )}
-          </Select>
-        </Col>
-      </Row>
+    <div style={{ padding: "24px" }}>
+      <Title level={2}>จัดการเกณฑ์การจัดเวร</Title>
+
+      <Card type="inner" title="เลือกวอร์ด" style={{ marginBottom: 24 }}>
+        <Select
+          style={{ width: "100%" }}
+          placeholder="เลือกวอร์ด"
+          value={selectedWard}
+          onChange={setSelectedWard}
+        >
+          {wards.map((ward) => (
+            <Option key={ward.id} value={ward.id}>
+              {ward.name}
+            </Option>
+          ))}
+        </Select>
+      </Card>
 
       <Card type="inner" title="ตั้งค่าเกณฑ์" style={{ marginBottom: 24 }}>
         <RuleSettingItem
@@ -350,18 +304,10 @@ const ManageRule = () => {
         </DndProvider>
       </Card>
 
-      <Row gutter={[16, 16]} justify="end">
-        <Col>
-          <Button
-            type="primary"
-            onClick={handleConfirmSaveAll}
-            disabled={!selectedWard}
-          >
-            บันทึกเกณฑ์และลำดับความสำคัญ
-          </Button>
-        </Col>
-      </Row>
-    </Card>
+      <Button type="primary" onClick={handleConfirmSaveAll}>
+        บันทึกการตั้งค่า
+      </Button>
+    </div>
   );
 };
 
