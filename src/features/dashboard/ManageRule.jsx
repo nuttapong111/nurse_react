@@ -142,6 +142,7 @@ const ManageRule = () => {
   useEffect(() => {
     if (!selectedWard) return;
     fetchPriorityRules();
+    fetchWardRule();
   }, [selectedWard]);
 
   const fetchWards = async () => {
@@ -179,12 +180,42 @@ const ManageRule = () => {
       const finalPriority = DEFAULT_PRIORITY.filter((key) => fullPriority.includes(key));
       setPriority(finalPriority);
     } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "เกิดข้อผิดพลาด",
-        text: "โหลดข้อมูลเกณฑ์ไม่สำเร็จ",
-        confirmButtonText: "ตกลง",
-      });
+      if (error.response && error.response.status === 404) {
+        setPriority(DEFAULT_PRIORITY);
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "เกิดข้อผิดพลาด",
+          text: "โหลดข้อมูลเกณฑ์ไม่สำเร็จ",
+          confirmButtonText: "ตกลง",
+        });
+      }
+    }
+  };
+
+  const fetchWardRule = async () => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/setting/wardrule/${selectedWard}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      const data = response.data;
+      if (data) {
+        setConsecutiveShifts(data.maxConsecutiveShifts ?? 3);
+        setConsecutiveNightShifts(data.maxNightShifts ?? 2);
+        setMaxConsecutiveWorkingHours(data.maxConsecutiveWorkingHours ?? 16);
+        setMaxShiftDiff(data.maxShiftDiff ?? 3);
+        setMaxShiftDiffPerType(data.maxShiftDiffPerType ?? 2);
+      }
+    } catch (error) {
+      // ถ้าไม่พบข้อมูลหรือ error ให้ใช้ default เดิม ไม่ต้องแจ้งเตือน
+      setConsecutiveShifts(3);
+      setConsecutiveNightShifts(2);
+      setMaxConsecutiveWorkingHours(16);
+      setMaxShiftDiff(3);
+      setMaxShiftDiffPerType(2);
     }
   };
 
